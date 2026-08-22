@@ -17,6 +17,10 @@ await build({
 
 copyFileSync('index.html', 'dist/index.html');
 copyFileSync('src/styles.css', 'dist/styles.css');
+copyFileSync('manifest.webmanifest', 'dist/manifest.webmanifest');
+for (const f of ['icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'logo.svg']) {
+  copyFileSync(`assets/${f}`, `dist/${f}`);
+}
 
 if (vendorWasm) {
   mkdirSync('dist/wasm', { recursive: true });

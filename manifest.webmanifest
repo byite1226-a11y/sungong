@@ -1,0 +1,17 @@
+{
+  "name": "순공 — 진짜 공부한 시간만",
+  "short_name": "순공",
+  "description": "카메라가 실제로 앉아 있던 시간만 세고, 그 시간이 내가 세운 계획에 자동으로 채워지는 학습 앱.",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F4F5FA",
+  "theme_color": "#F4F5FA",
+  "icons": [
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
