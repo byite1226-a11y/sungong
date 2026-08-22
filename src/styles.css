@@ -1,6 +1,7 @@
 /* 순공 — 디자인 토큰 최종본 v2 */
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html,body{height:100%;overflow:hidden;background:#0B0E1C}
+html,body{height:100%;overflow:hidden;background:#E9EBF1}
+@media (prefers-color-scheme: dark){ html,body{background:#0B0E1C} }
 body{
   font-family:'Pretendard','Pretendard Variable',-apple-system,BlinkMacSystemFont,
     'Apple SD Gothic Neo','Noto Sans KR',system-ui,sans-serif;
@@ -45,6 +46,35 @@ a{color:inherit}
   background:var(--bg);color:var(--tx);
   max-width:520px;margin:0 auto;
   transition:background .26s cubic-bezier(.2,.8,.25,1);
+}
+/* 넓은 화면 — 디자인의 태블릿 아트보드가 834px 기준이라 거기까지 벌린다.
+   좌우 여백에 배경이 드러나므로 앱 가장자리를 선으로 마감해 '잘린 것'이 아니라
+   '의도된 틀'로 읽히게 한다. */
+@media (min-width:860px){
+  .app{max-width:834px; border-left:1px solid var(--line); border-right:1px solid var(--line)}
+}
+
+/* 태블릿 2단 — 아트보드가 화면마다 정한 비율을 그대로 쓴다 */
+@media (min-width:760px){
+  .two{display:grid; gap:14px 16px; align-items:start}
+  .two>*{min-width:0}
+  .two.home{grid-template-columns:340px 1fr}
+  .two.result{grid-template-columns:300px 1fr}
+  .two.cal{grid-template-columns:1fr 264px}
+  .two.plan{grid-template-columns:1fr 280px}
+  /* 캘린더: 격자가 넓은 쪽, 그날 상세가 오른쪽 기둥 */
+  .two.cal>:first-child{grid-column:1}
+  .two.cal>:last-child{grid-column:2;grid-row:1}
+  /* 플래너: 목록이 왼쪽, 진행 카드와 안내가 오른쪽 기둥에 쌓인다 */
+  .two.plan>.pl-list{grid-column:1;grid-row:1/span 3}
+  .two.plan>:not(.pl-list){grid-column:2}
+  .two>*{margin-top:0}
+  /* 아트보드 배치: 좌 = 링·시작·프라이버시 / 우 = 이번 주·오늘 할 일.
+     DOM 순서는 폰 기준(링→시작→이번주→할일→프라이버시)이라 여기서만 자리를 옮긴다 */
+  .two.home>.g11{grid-column:1;grid-row:1}   /* 링 + 시작 버튼 한 덩어리 */
+  .two.home>.g13{grid-column:1;grid-row:2}   /* 프라이버시 — 좌측 마지막이라 아래 여백이 보이지 않는다 */
+  .two.home>.g21{grid-column:2;grid-row:1}   /* 이번 주 */
+  .two.home>.g22{grid-column:2;grid-row:2}   /* 오늘 할 일 */
 }
 .app.tone-acc{background:var(--tone-acc)}
 .app.tone-sunk{background:var(--tone-sunk)}

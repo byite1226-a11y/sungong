@@ -121,6 +121,8 @@ function vHome() {
     </div>
 
     <div class="pad">
+     <div class="two home">
+      <div class="g11">
       <div class="card p" style="padding:24px 18px 20px;animation:riseIn .4s cubic-bezier(0,.9,.3,1) both">
         <div class="ring-wrap" style="margin:0 auto;width:202px">
           ${ring(Math.min(1, raw), { size: 202, sw: 14, boot: true, outer: over ? raw - 1 : 0 })}
@@ -144,10 +146,11 @@ function vHome() {
       </div>
 
       <button class="btn start" style="margin-top:14px" data-a="go" data-v="ready">${ic('play', 18)} 지금 집중 시작</button>
+      </div>
 
       ${weekCard()}
 
-      <div class="sec">
+      <div class="g22 sec">
         <div class="sec-head">
           <div class="row" style="gap:8px;align-items:baseline">
             <div class="h2">오늘 할 일</div>
@@ -170,7 +173,7 @@ function vHome() {
              </div></div>`}
       </div>
 
-      <div class="sec">
+      <div class="g13 sec">
         <div class="card p tint-ok row" style="gap:12px" data-a="go" data-v="settings">
           <div class="ico ok tile">${ic('shield', 19)}</div>
           <div class="grow">
@@ -180,6 +183,7 @@ function vHome() {
           <div style="color:var(--tx-3);flex:none">${ic('right', 18)}</div>
         </div>
       </div>
+     </div>
     </div>
   </div>${tabbar('home')}`;
 }
@@ -192,13 +196,13 @@ function weekCard() {
       <button class="cap" style="color:var(--pri);font-size:13px;font-weight:650" data-a="go" data-v="stats">기록 전체</button>
     </div>`;
 
-  if (!r) return `<div class="sec">${head}
+  if (!r) return `<div class="g21 sec">${head}
     <div class="card p">
       <div class="shim" style="height:14px;width:60%"></div>
       <div class="shim" style="height:72px;margin-top:12px;border-radius:12px"></div>
     </div></div>`;
 
-  if (!r.total_sec) return `<div class="sec">${head}
+  if (!r.total_sec) return `<div class="g21 sec">${head}
     <div class="card"><div class="empty">
       <svg width="104" height="56" viewBox="0 0 104 56" fill="none" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
         <path d="M6 50h92" stroke="var(--tx-3)"/>
@@ -214,7 +218,7 @@ function weekCard() {
   const diff  = r.total_sec - (r.prev_total_sec || 0);
   const mon   = mondayOf(), today = kstToday();
 
-  return `<div class="sec">${head}
+  return `<div class="g21 sec">${head}
     <div class="card p" style="animation:riseIn .4s cubic-bezier(0,.9,.3,1) 30ms both">
       <div class="between" style="align-items:flex-start">
         <div>
@@ -984,6 +988,7 @@ function calMonth() {
 
   return `<div class="scroll pb pbf">${calHead('month', title)}
     ${sumCard([['순공 합계', hm(c.total_sec)], ['공부한 날', `${c.studied_days ?? 0}일`], ['최장 연속', `${c.streak?.longest ?? 0}일`]])}
+   <div class="two cal">
     <div class="card p" style="margin-top:12px">
       <div class="cal" style="margin-bottom:8px">${DOW.map((d, i) => `<div class="hd ${i === 6 ? 'sun' : ''}">${d}</div>`).join('')}</div>
       <div class="cal" style="animation:riseIn .24s cubic-bezier(0,.9,.3,1) both">
@@ -1012,6 +1017,7 @@ function calMonth() {
       </div>
     </div>
     ${daySection(sel, !c.total_sec, map[sel]?.net_sec ?? 0)}
+   </div>
   ${calFoot()}`;
 }
 
@@ -1284,6 +1290,7 @@ function vPlanner() {
     <div class="pad">
       ${dateStrip(date)}
 
+     <div class="two plan">
       ${!list.length ? '' : future
         ? `<div class="card p" style="margin-top:12px">
              <div class="lbl">계획</div>
@@ -1304,7 +1311,7 @@ function vPlanner() {
              </div>
            </div>`}
 
-      <div class="sec">
+      <div class="pl-list sec">
         <div class="sec-head">
           <div class="h2">${isToday ? '오늘 · ' : ''}${md}</div>
           ${isToday ? '<span class="cap">체크하면 순공시간과 묶입니다</span>' : ''}
@@ -1332,6 +1339,7 @@ function vPlanner() {
         <div style="font-size:13px;line-height:1.55;color:var(--tx-2)">할 일에 목표 시간을 적어두면, 집중 세션을 끝냈을 때 그 시간이 자동으로 채워집니다.</div>
         <div style="margin-top:8px;font-size:13px;line-height:1.55;color:var(--tx-3)">계획과 실제의 차이가 다음 주 계획을 세우는 유일한 근거입니다.</div>
       </div></div>
+     </div>
     </div>
   </div>
   <button class="fab pri" data-a="sheetAdd">${ic('plus', 26, 2.1)}</button>${tabbar('planner')}`;
