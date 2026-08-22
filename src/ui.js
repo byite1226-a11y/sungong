@@ -45,6 +45,17 @@ export function hmBig(sec) {
   return h ? `${h}<span class="u">시간</span> ${mm}<span class="u">분</span>`
            : `${mm}<span class="u">분</span>`;
 }
+/* 숫자 40 / 단위 16 을 baseline 에 걸어 한 줄로 — 디자인 01 홈 §1
+   big·small 은 px, gap 은 시간과 분 사이 광학 간격 */
+export function hmSplit(sec, big = 40, small = 16, gap = 6) {
+  const m = Math.round((sec || 0) / 60), h = Math.floor(m / 60), mm = m % 60;
+  const n = v => `<span style="font-size:${big}px;font-weight:800">${v}</span>`;
+  const u = s => `<span style="font-size:${small}px;font-weight:700">${s}</span>`;
+  const body = h ? `${n(h)}${u('시간')}<span style="width:${gap}px;flex:none"></span>${n(mm)}${u('분')}`
+                 : `${n(mm)}${u('분')}`;
+  return `<div class="num" style="display:flex;align-items:baseline;white-space:nowrap;
+    letter-spacing:-.05em;line-height:1.05">${body}</div>`;
+}
 export const hmc = min => `${Math.floor(min / 60)}:${pad(min % 60)}`;
 
 /* KST 기준 날짜 도구 */
@@ -80,7 +91,15 @@ export function ring(pct, o = {}) {
     <circle class="val" cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${o.color||'var(--pri)'}"
       stroke-width="${sw}" stroke-linecap="round" stroke-dasharray="${c.toFixed(1)}"
       stroke-dashoffset="${(c * (1 - Math.max(0, Math.min(1, pct)))).toFixed(1)}"/>
+    ${o.outer > 0 ? outerRing(size, o.outer) : ''}
   </svg>`;
+}
+/* 목표를 넘긴 만큼만 도는 바깥 링 — 안쪽 링이 100% 에서 멈춘 뒤의 초과분 */
+function outerRing(size, frac) {
+  const r = size / 2 - 4, c = 2 * Math.PI * r;
+  return `<circle cx="${size/2}" cy="${size/2}" r="${r.toFixed(1)}" fill="none" stroke="var(--acc)"
+    stroke-width="2" stroke-dasharray="${c.toFixed(1)}"
+    stroke-dashoffset="${(c * (1 - Math.min(1, frac))).toFixed(1)}"/>`;
 }
 
 /* ── DOM ──────────────────────────────────────── */

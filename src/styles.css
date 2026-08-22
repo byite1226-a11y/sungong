@@ -91,6 +91,7 @@ a{color:inherit}
 .ico{width:34px;height:34px;flex:none;border-radius:11px;display:grid;place-items:center;background:var(--pri-weak);color:var(--pri-weak-tx)}
 .ico.ok{background:var(--ok-weak);color:var(--ok)}
 .ico.acc{background:var(--acc-weak);color:var(--acc-tx)}
+.ico.tile{width:36px;height:36px;border-radius:12px;background:var(--surface)}
 
 /* ── 버튼 · 칩 · 배지 ───────────────────────────────── */
 .btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;height:54px;
@@ -110,8 +111,8 @@ a{color:inherit}
 .chip{border-radius:11px;padding:9px 14px;font-size:13px;font-weight:650;
   background:var(--surface);border:1px solid var(--line);color:var(--tx-2);transition:.14s}
 .chip.on{background:var(--pri);border-color:var(--pri);color:var(--pri-tx)}
-.pill{display:inline-flex;align-items:center;gap:5px;border-radius:99px;white-space:nowrap;
-  font-size:11.5px;font-weight:700;padding:5px 10px;letter-spacing:-.01em}
+.pill{display:inline-flex;align-items:center;gap:4px;border-radius:99px;white-space:nowrap;
+  font-size:12px;font-weight:650;padding:4px 10px;letter-spacing:-.01em}
 .pill.pri{background:var(--pri-weak);color:var(--pri-weak-tx)}
 .pill.acc{background:var(--acc-weak);color:var(--acc-tx)}
 .pill.ok{background:var(--ok-weak);color:var(--ok)}
@@ -130,6 +131,7 @@ a{color:inherit}
 
 .meter{height:5px;border-radius:99px;background:var(--sunk);overflow:hidden}
 .meter i{display:block;height:100%;border-radius:99px;background:var(--pri);transition:width .32s cubic-bezier(.2,.8,.25,1)}
+.meter.fix{width:96px;flex:none}
 
 /* ── 탭바 · FAB ─────────────────────────────────────── */
 .tabbar{position:absolute;left:0;right:0;bottom:0;height:calc(74px + env(safe-area-inset-bottom));z-index:40;
@@ -233,6 +235,8 @@ a{color:inherit}
 .skel{background:var(--sunk);border-radius:10px;position:relative;overflow:hidden}
 .skel::after{content:"";position:absolute;inset:0;transform:translateX(-100%);
   background:linear-gradient(90deg,transparent,rgba(127,140,180,.14),transparent);animation:sh 1.4s infinite}
+.shim{background:linear-gradient(90deg,var(--sunk) 25%,var(--line) 50%,var(--sunk) 75%);
+  background-size:200% 100%;animation:shimmer 1400ms linear infinite;border-radius:7px}
 @keyframes sh{100%{transform:translateX(100%)}}
 .center{flex:1;display:grid;place-items:center;padding:20px}
 
@@ -247,3 +251,22 @@ a{color:inherit}
 @media (prefers-reduced-motion: reduce){
   *{ animation-duration:1ms !important; transition-duration:1ms !important }
 }
+
+/* ── 화면 이식에서 추가된 것들 ─────────────────────────── */
+/* 카드 안 보조 설명 — .cap(11.5) 보다 크고 .sub(--tx-2) 보다 흐리다 */
+.sub-3, .rsub{font-size:13px;line-height:1.55;color:var(--tx-3)}
+.rsub{margin-top:2px}
+
+/* 주간 캘린더 열 — 격자선을 열 안쪽에만 두려면 여기서 잘라야 한다 */
+.wcol{position:relative;height:306px;border-radius:8px;overflow:hidden;background:var(--sunk)}
+.wcol.today{box-shadow:inset 0 0 0 1.5px var(--acc)}
+
+/* 세션 요약 구간 툴팁 — 라디오 :checked 로 여닫는다 */
+.tl-pick{position:absolute;width:0;height:0;opacity:0;pointer-events:none}
+.tl-tip{display:none;margin-top:12px;background:var(--sunk);border-radius:13px;padding:10px 12px;align-items:center;gap:10px}
+
+/* 04·05 경고 점 — 점멸이 아니라 완만한 페이드. 깨우는 건 소리·진동 몫이다 */
+@keyframes softFade{0%,100%{opacity:1}50%{opacity:.45}}
+@keyframes toneIn{from{opacity:0}to{opacity:1}}
+/* 제목이 빈 채로 저장을 누르면 */
+@keyframes shakeX{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}

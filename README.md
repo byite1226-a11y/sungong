@@ -15,24 +15,17 @@ npx serve dist          # 또는 아무 정적 서버
 
 ## 배포 (Vercel)
 
-```bash
-npx vercel --prod
-```
+GitHub `byite1226-a11y/sungong` 의 `main` 에 올리면 자동 배포됩니다 → https://sungong-app.vercel.app
 
-빌드 설정은 자동 감지되지 않으니 처음 한 번만:
-
-- Build Command: `npm run build`
-- Output Directory: `dist`
-- Install Command: `npm install`
-
-`vercel.json` 에 `Permissions-Policy: camera=(self)` 가 들어 있어 카메라가 허용됩니다.
+빌드 설정(`buildCommand` · `outputDirectory`)은 `vercel.json` 안에 들어 있어 대시보드에서 따로 맞출 필요가 없습니다.
+같은 파일의 `Permissions-Policy: camera=(self)` 가 카메라를 허용합니다.
 
 ## 구조
 
 ```
 index.html          진입점 (dist 기준 경로)
-build.mjs           esbuild 번들 + wasm 복사
-src/main.js         상태 · 라우터 · 9화면 · 세션 제어
+build.mjs           esbuild 번들 (wasm 은 CDN, --vendor-wasm 으로 자체 호스팅 가능)
+src/main.js         상태 · 라우터 · 화면 13장 · 세션 제어
 src/db.js           Supabase 클라이언트 + RPC 래퍼
 src/detect.js       MediaPipe FaceLandmarker 판정기 (+ 수동 폴백)
 src/ui.js           아이콘 · 포맷터 · 링 · 토스트
@@ -60,9 +53,20 @@ src/styles.css      디자인 토큰 (라이트 A / 다크 B)
 Supabase `wiezfwgevjvcoambrngh` (ap-northeast-2). 스키마·RLS·RPC는 이미 적용돼 있습니다.
 데모 계정: `demo@sungong.app` / `sungong-demo-2026` (3주치 시드 포함)
 
+## 디자인
+
+클로드 디자인 아트보드 13장(폰) 기준으로 전 화면을 조판했습니다.
+토큰 이름·값은 `공모전-디자인시스템-마스터브리프` v2 를 그대로 따릅니다.
+
+지키고 있는 두 가지 —
+- **과목 색 5종**은 색각 이상(deutan·protan) ΔE 검증을 통과한 값입니다. 임의로 바꾸면 히트맵·통계가 무너집니다
+- **구간 4종**은 색만이 아니라 텍스처로도 구분됩니다 (졸음 45° 사선 · 휴식 세로 점선). 흑백으로 뽑아도 읽힙니다
+
 ## 아직 안 된 것
 
-- 할 일 추가 시트 (버튼은 있고 안내 토스트만 뜸)
 - 포모도로 긴 휴식 분기 (짧은 휴식만)
 - 오프라인 큐 (RPC 실패 시 화면은 계속 돌지만 재업로드는 미구현)
-- 세션 요약의 구간 탭 툴팁·구간 수동 편집
+- 세션 요약의 구간 경계 수동 편집
+- 반복 할 일 (스키마·RPC 는 있고 화면이 없음)
+- 회원 탈퇴 (앱스토어 심사 항목 — Edge Function 필요)
+- 푸시 알림 스케줄러

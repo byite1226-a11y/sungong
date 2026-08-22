@@ -114,6 +114,20 @@ export async function toggleTodo(id, done) {
   if (error) throw error;
   return data;
 }
+export async function updateTodo(id, patch) {
+  const { data, error } = await sb.from('todo').update(patch).eq('id', id).select().single();
+  if (error) throw error;
+  return data;
+}
+export async function deleteTodo(id) {
+  const { error } = await sb.from('todo').delete().eq('id', id);
+  if (error) throw error;
+}
+
+/* ── 데이터 관리 ─────────────────────────────── */
+export const exportJson        = () => rpc('fn_export_json');
+export const deleteAllRecords  = () => rpc('fn_delete_all_records');
+
 export async function corrections(limit = 20) {
   const { data, error } = await sb.from('correction_log')
     .select('*').order('created_at', { ascending: false }).limit(limit);
