@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- 순공 로고 — 학사모 + 시계
+       원본 아이콘의 파랑(#1E5CEA)·라운드 비율(22.4%)·학사모 형태를 유지하고
+       아래 말풍선만 시계로 바꿨습니다.
+       학사모 끝이 시계판 안쪽까지 내려와, 두 형태가 겹치는 자리에만
+       배경색 테두리가 드러나면서 하나의 마크로 읽힙니다.
+       12시 눈금은 두지 않습니다 — 그 자리를 학사모가 차지합니다. -->
+
+  <rect width="1024" height="1024" rx="229" ry="229" fill="#1E5CEA"/>
+
+  <!-- 시계판 -->
+  <circle cx="512" cy="595" r="175" fill="#FFFFFF"/>
+
+  <!-- 눈금 3 · 6 · 9 — 테두리에서 충분히 안쪽으로 (가장자리에 붙으면 이가 빠져 보인다) -->
+  <g stroke="#1E5CEA" stroke-width="15" stroke-linecap="round">
+    <path d="M630 595 h28"/>
+    <path d="M512 713 v28"/>
+    <path d="M394 595 h-28"/>
+  </g>
+
+  <!-- 바늘 10:10 — 좌우 균형이 맞고 학사모 아래로 빠져나온다 -->
+  <g stroke="#1E5CEA" stroke-linecap="round" fill="none">
+    <path d="M512 595 L614 536" stroke-width="23"/>
+    <path d="M512 595 L434 550" stroke-width="27"/>
+  </g>
+  <circle cx="512" cy="595" r="16" fill="#1E5CEA"/>
+
+  <!-- 학사모 -->
+  <path d="M512 255 L795 380 L512 505 L229 380 Z"
+        fill="#FFFFFF" stroke="#1E5CEA" stroke-width="24" stroke-linejoin="round"/>
+
+  <!-- 술 — 끈 · 매듭 · 가닥 -->
+  <g fill="#FFFFFF">
+    <rect x="247" y="392" width="18" height="112" rx="9"/>
+    <circle cx="256" cy="521" r="20"/>
+    <g stroke="#FFFFFF" stroke-width="13" stroke-linecap="round">
+      <path d="M239 539 L231 583"/>
+      <path d="M251 543 L248 589"/>
+      <path d="M265 543 L270 589"/>
+      <path d="M277 539 L287 581"/>
+    </g>
+  </g>
+</svg>

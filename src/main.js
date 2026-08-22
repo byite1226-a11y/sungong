@@ -1840,8 +1840,49 @@ function startTick() {
   clearInterval(tickTimer); clearInterval(beatTimer);
   tickTimer = setInterval(tick, 1000);
   beatTimer = setInterval(() => S.focus && db.heartbeat(S.focus.id).catch(() => {}), 30000);
+  keepAwake(true);
 }
-function stopTick() { clearInterval(tickTimer); clearInterval(beatTimer); }
+function stopTick() { clearInterval(tickTimer); clearInterval(beatTimer); keepAwake(false); }
+
+/* ── 화면 꺼짐 방지 ──────────────────────────────────────
+   모바일 브라우저는 화면이 꺼지면 타이머를 얼리고 카메라 프레임도 멈춥니다.
+   책상에 세워두고 쓰는 앱이라 이게 없으면 30초 만에 측정이 죽습니다.
+   Wake Lock 을 지원하지 않는 브라우저에서는 아래 visibilitychange 보정이 받아냅니다. */
+let wakeLock = null;
+async function keepAwake(on) {
+  try {
+    if (on) {
+      if (!wakeLock && navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen');
+    } else if (wakeLock) {
+      await wakeLock.release(); wakeLock = null;
+    }
+  } catch { wakeLock = null; }      // 배터리 절약 모드 등에서 거부될 수 있다 — 조용히 넘어간다
+}
+
+/* ── 화면이 꺼졌거나 다른 앱에 갔다 온 구간 처리 ──────────
+   그동안 카메라는 아무것도 보지 못했습니다.
+   본 적 없는 시간을 순공으로 세면 이 앱이 하는 말 전체가 거짓이 됩니다.
+   그래서 그 구간은 통째로 '자리 비움'으로 넣습니다. 사용자가 정정할 수 있습니다. */
+let hiddenAt = 0;
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return; }
+  const gap = hiddenAt ? Math.round((Date.now() - hiddenAt) / 1000) : 0;
+  hiddenAt = 0;
+  if (S.route === 'focus') keepAwake(true);       // Wake Lock 은 복귀 시 재요청해야 한다
+  const f = S.focus;
+  if (!f || gap < 3) return;
+
+  f.gross += gap;                                 // 벽시계는 흘렀다
+  if (f.state !== 'ok') { f.offSec += gap; render(); return; }   // 이미 빠지는 중이면 서버가 이어서 센다
+
+  try {
+    await db.openSpan(f.id, 'away', new Date(Date.now() - gap * 1000));
+    await db.closeSpan(f.id);
+    f.awayCount++;
+    toast(`화면이 꺼져 있던 ${clock(gap)} 은 순공에서 뺐습니다`);
+  } catch { /* 오프라인이면 서버 쪽은 다음 동기화에서 맞춰진다 */ }
+  render();
+});
 
 function tick() {
   const f = S.focus; if (!f) return;
