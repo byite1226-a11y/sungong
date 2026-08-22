@@ -370,7 +370,7 @@ function vReady() {
             <div class="grow">
               <div class="h3">졸음 감지</div>
               <div style="margin-top:2px;font-size:13px;line-height:1.55;color:var(--tx-3)">
-                ${camLive ? '눈을 감거나 엎드리면 그 시간이 빠집니다' : '착석 감지를 켜야 졸음도 볼 수 있어요'}</div>
+                ${camLive ? '눈을 감거나 책상에 엎드리면 그 시간이 빠집니다' : '착석 감지를 켜야 졸음도 볼 수 있어요'}</div>
             </div>
             <div class="sw ${drowsy ? 'on' : ''} ${camLive ? '' : 'lock'}"><i></i></div>
           </div>
@@ -581,6 +581,8 @@ function vFocus() {
   /* 졸음 '의심' — 감지기가 drowsy 를 재는 중(pending)일 뿐 아직 확정 전.
      카드만 주황으로 두고 링·타이머·배경은 손대지 않는다 → 화면이 번쩍이지 않는다. */
   const suspect = !acc && !brk && det?.pending === 'drowsy';
+  /* 엎드림 = 얼굴은 안 보이는데 Pose 가 상체를 잡은 경우. 눈 감김과 화면 문구가 다르다 */
+  const slumped = st === 'drowsy' && (det?.reason === 'slump' || det?.last?.reason === 'slump');
 
   const goalSec = Math.max(1, (f.goalMin || 30) * 60);
   const raw     = f.net / goalSec;
@@ -662,10 +664,13 @@ function vFocus() {
           <div class="row" style="gap:10px;align-items:flex-start">
             ${warnDot(9)}
             <div class="grow" style="margin-top:-2px">
-              <div class="h3">${st === 'away' ? '자리를 비운 것 같아요' : '졸고 있는 것 같아요'}</div>
+              <div class="h3">${st === 'away' ? '자리를 비운 것 같아요'
+                : slumped ? '책상에 엎드린 것 같아요' : '졸고 있는 것 같아요'}</div>
               <div style="margin-top:6px;font-size:13px;line-height:1.55;color:var(--tx-2)">${st === 'away'
                 ? '돌아와 앉으면 자동으로 다시 이어서 잽니다. 이 시간은 순공시간에서 빠집니다.'
-                : '눈을 감은 채로 시간이 지났어요. 이 시간은 순공시간에서 빠집니다.'}</div>
+                : slumped
+                  ? '얼굴은 안 보이는데 자리에는 계신 것 같아요. 이 시간은 순공시간에서 빠집니다.'
+                  : '눈을 감은 채로 시간이 지났어요. 이 시간은 순공시간에서 빠집니다.'}</div>
             </div>
           </div>
         </div>
@@ -1758,6 +1763,7 @@ async function ensurePreview() {
     awaySec:   S.fast ? 3 : (p.away_threshold_sec ?? 20),
     drowsySec: S.fast ? 2 : (p.drowsy_threshold_sec ?? 8),
     drowsyOn:  p.drowsy_enabled !== false,
+    poseOn:    p.drowsy_enabled !== false,   // 엎드림은 얼굴이 안 보이므로 Pose 가 있어야 잡힌다
     onState:   onDetState,
     onTick:    onDetTick,
   });
@@ -1783,7 +1789,10 @@ function setCamState(txt, ok) {
 }
 function onDetTick(v) {
   if (S.route !== 'ready') return;
-  setCamState(v.present ? (v.blink > 0.5 ? '눈 감김 감지' : '착석 확인 중') : '얼굴이 보이지 않아요', v.present && v.blink <= 0.5);
+  const txt = v.present ? (v.blink > 0.5 ? '눈 감김 감지' : '착석 확인 중')
+            : v.body    ? '엎드림 감지'
+            : '얼굴이 보이지 않아요';
+  setCamState(txt, v.present && v.blink <= 0.5);
 }
 
 /* ── 세션 제어 ── */
