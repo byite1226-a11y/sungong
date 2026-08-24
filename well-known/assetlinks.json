@@ -2,7 +2,7 @@
   "relation": ["delegate_permission/common.handle_all_urls"],
   "target": {
     "namespace": "android_app",
-    "package_name": "co.byite.sungong",
+    "package_name": "kr.co.byite.sungong",
     "sha256_cert_fingerprints": [
       "PUT_YOUR_SHA256_FINGERPRINT_HERE"
     ]
