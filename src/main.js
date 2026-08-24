@@ -1786,9 +1786,11 @@ async function ensurePreview() {
     onState:   onDetState,
     onTick:    onDetTick,
     onLost:    onCamLost,
+    onPhase:   (ph) => { if (ph === 'model') setCamState('감지 모델 내려받는 중 — 첫 실행은 오래 걸릴 수 있어요', true); },
   });
   S.detector = d;
   try {
+    setCamState('카메라 여는 중', true);
     await d.start(videoEl);
     S.camFail = null;
     render();
@@ -1811,6 +1813,7 @@ function setCamState(txt, ok) {
 }
 function onDetTick(v) {
   if (S.route !== 'ready') return;
+  if (v.error) { setCamState(`감지 오류 · 복구 중 (${v.errStreak})`, false); return; }
   const txt = v.present ? (v.blink > 0.5 ? '눈 감김 감지' : '착석 확인 중')
             : v.body    ? '엎드림 감지'
             : '얼굴이 보이지 않아요';
@@ -1859,10 +1862,13 @@ async function flushSpans(quiet = true) {
    더 이상 관찰할 수 없으므로 열린 구간을 그 시점에 닫고 수동 모드로 넘긴다.
    그냥 두면 얼굴이 영영 안 보이는 것으로 읽혀 세션 내내 '자리 비움'이 된다. */
 async function onCamLost() {
-  if (!S.focus || S.route !== 'focus') return;
-  if (S.focus.state !== 'ok') await onDetState('ok', S.focus.state);
+  const why = S.detector?.failed === 'model'
+    ? '감지를 계속할 수 없어 수동 모드로 이어갑니다'
+    : '카메라 연결이 끊겼어요 — 수동 모드로 이어갑니다';
+  if (S.focus && S.route === 'focus' && S.focus.state !== 'ok') await onDetState('ok', S.focus.state);
+  S.camFail = S.detector?.failed || 'nocam';
   S.detector = new ManualDetector({ onState: onDetState });
-  toast('카메라 연결이 끊겼어요 — 수동 모드로 이어갑니다');
+  toast(why);
   render();
 }
 
