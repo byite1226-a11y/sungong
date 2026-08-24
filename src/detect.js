@@ -38,6 +38,8 @@ export class Detector {
     this.poseOn    = opts.poseOn    ?? true;   // 엎드림 감지 (졸음 감지를 끄면 같이 꺼진다)
     this.onState   = opts.onState   || (() => {});
     this.onTick    = opts.onTick    || (() => {});
+    this.onLost    = opts.onLost    || (() => {});   // 카메라가 세션 도중 끊겼을 때
+    this.lost      = false;
     this.state = 'ok';                 // ok | away | drowsy
     this.pending = null;               // 후보 상태
     this.pendingSince = 0;
@@ -58,6 +60,9 @@ export class Detector {
       this.stream = stream;
       video.srcObject = stream;
       await video.play();
+      // 다른 앱이 카메라를 가져가거나 사용자가 권한을 회수하면 트랙이 'ended' 로 끝난다.
+      // 이걸 잡지 않으면 얼굴이 영영 안 보이는 것으로 읽혀 세션 내내 '자리 비움'이 된다.
+      stream.getVideoTracks().forEach(tr => tr.addEventListener('ended', () => this._lost()));
     } catch (e) {
       this.failed = e.name === 'NotAllowedError' ? 'denied' : 'nocam';
       throw e;
@@ -99,6 +104,15 @@ export class Detector {
     }
   }
 
+  _lost() {
+    if (this.lost) return;
+    this.lost = true;
+    clearInterval(this.timer);
+    this.ready = false;
+    this.failed = 'lost';
+    this.onLost();
+  }
+
   stop() {
     clearInterval(this.timer);
     this.stream?.getTracks().forEach(t => t.stop());   // 카메라 즉시 해제
@@ -134,7 +148,10 @@ export class Detector {
   }
 
   _tick() {
-    if (!this.ready || !this.video || this.video.readyState < 2) return;
+    if (!this.ready || !this.video) return;
+    const tr = this.stream?.getVideoTracks?.()[0];
+    if (!tr || tr.readyState === 'ended' || !this.stream.active) return this._lost();
+    if (this.video.readyState < 2) return;
     let res;
     try { res = this.lm.detectForVideo(this.video, performance.now()); }
     catch { return; }

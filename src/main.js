@@ -1774,6 +1774,7 @@ async function ensurePreview() {
     poseOn:    p.drowsy_enabled !== false,   // 엎드림은 얼굴이 안 보이므로 Pose 가 있어야 잡힌다
     onState:   onDetState,
     onTick:    onDetTick,
+    onLost:    onCamLost,
   });
   S.detector = d;
   try {
@@ -1801,6 +1802,55 @@ function onDetTick(v) {
             : v.body    ? '엎드림 감지'
             : '얼굴이 보이지 않아요';
   setCamState(txt, v.present && v.blink <= 0.5);
+}
+
+/* ── 구간 기록 큐 ─────────────────────────────────────────
+   구간의 시각은 로컬이 진실입니다. 서버 호출이 실패해도 시각을 버리지 않고
+   쌓아뒀다가 다시 보냅니다.
+
+   이게 없으면 네트워크가 끊긴 동안의 이탈·졸음이 서버에 남지 않고,
+   그 시간이 조용히 순공시간으로 계산됩니다.
+   "앉아 있던 시간만 센다"는 이 앱의 약속이 거기서 깨집니다. */
+const QKEY = 'span_queue';
+const loadQ = () => { try { return JSON.parse(localStorage.getItem(QKEY) || '[]'); } catch { return []; } };
+const saveQ = (q) => { try { localStorage.setItem(QKEY, JSON.stringify(q)); } catch {} };
+function queueSpan(item) { const q = loadQ(); q.push(item); saveQ(q); }
+
+/* 이미 끝난 세션에는 구간을 넣을 수 없습니다 (서버가 P0002 로 거부).
+   그런 항목은 몇 번을 다시 보내도 통과하지 못하므로 재시도 대상에서 뺍니다. */
+const isDead = (e) => e?.code === 'P0002' || /active session not found/i.test(e?.message || '');
+
+let flushing = false;
+async function flushSpans(quiet = true) {
+  if (flushing) return false;
+  const q = loadQ(); if (!q.length) return true;
+  flushing = true;
+  const left = []; let dropped = 0;
+  for (const it of q) {
+    try {
+      if (it.t === 'close') await db.closeSpan(it.sid, new Date(it.to));
+      else { await db.openSpan(it.sid, it.kind, new Date(it.from)); await db.closeSpan(it.sid, new Date(it.to)); }
+    } catch (e) {
+      if (isDead(e)) { dropped++; continue; }
+      left.push(it);
+    }
+  }
+  saveQ(left); flushing = false;
+  const sent = q.length - left.length - dropped;
+  if (sent && !quiet) toast(`저장하지 못했던 구간 ${sent}개를 반영했어요`);
+  if (dropped) toast(`구간 ${dropped}개는 세션이 이미 끝나 반영하지 못했습니다`);
+  return left.length === 0;
+}
+
+/* 세션 도중 카메라가 끊겼을 때 — 다른 앱이 가져갔거나 권한이 회수된 경우.
+   더 이상 관찰할 수 없으므로 열린 구간을 그 시점에 닫고 수동 모드로 넘긴다.
+   그냥 두면 얼굴이 영영 안 보이는 것으로 읽혀 세션 내내 '자리 비움'이 된다. */
+async function onCamLost() {
+  if (!S.focus || S.route !== 'focus') return;
+  if (S.focus.state !== 'ok') await onDetState('ok', S.focus.state);
+  S.detector = new ManualDetector({ onState: onDetState });
+  toast('카메라 연결이 끊겼어요 — 수동 모드로 이어갑니다');
+  render();
 }
 
 /* ── 세션 제어 ── */
@@ -1847,7 +1897,11 @@ let tickTimer, beatTimer;
 function startTick() {
   clearInterval(tickTimer); clearInterval(beatTimer);
   tickTimer = setInterval(tick, 1000);
-  beatTimer = setInterval(() => S.focus && db.heartbeat(S.focus.id).catch(() => {}), 30000);
+  beatTimer = setInterval(() => {
+    if (!S.focus) return;
+    db.heartbeat(S.focus.id).catch(() => {});
+    flushSpans(false);
+  }, 30000);
   keepAwake(true);
 }
 function stopTick() { clearInterval(tickTimer); clearInterval(beatTimer); keepAwake(false); }
@@ -1920,17 +1974,35 @@ async function onDetState(next, prev) {
   const f = S.focus;
   if (!f || S.route !== 'focus' || f.state === 'break') return;
   if (next === prev) return;
-  try {
-    if (prev !== 'ok' && f.openSpanKind) { await db.closeSpan(f.id); f.openSpanKind = null; }
-    if (next !== 'ok') {
-      await db.openSpan(f.id, next);
-      f.openSpanKind = next;
-      f.offSec = 0;
-      if (next === 'away') f.awayCount++; else f.drowsyCount++;
+  const now = new Date();
+  let missed = false;
+
+  /* 이전 구간 닫기 */
+  if (prev !== 'ok' && f.spanFrom) {
+    if (f.openSpanKind) {
+      try { await db.closeSpan(f.id, now); }
+      catch { queueSpan({ t: 'close', sid: f.id, to: now.toISOString() }); missed = true; }
+    } else {
+      /* 서버는 이 구간의 시작조차 모른다 — 통째로 다시 넣는다 */
+      queueSpan({ t: 'span', sid: f.id, kind: prev, from: f.spanFrom, to: now.toISOString() });
+      missed = true;
     }
-  } catch (e) { /* 오프라인이어도 화면은 계속 돈다 */ }
+    f.openSpanKind = null; f.spanFrom = null;
+  }
+
+  /* 새 구간 열기 — 서버가 실패해도 시작 시각은 로컬에 남긴다 */
+  if (next !== 'ok') {
+    f.spanFrom = now.toISOString();
+    f.offSec = 0;
+    if (next === 'away') f.awayCount++; else f.drowsyCount++;
+    try { await db.openSpan(f.id, next, now); f.openSpanKind = next; }
+    catch { f.openSpanKind = null; }
+  }
+
   f.state = next;
   render();
+  if (missed) toast('구간을 지금 저장하지 못했어요 — 연결되면 자동으로 반영됩니다');
+  flushSpans();
 }
 
 async function startBreak() {
@@ -1952,13 +2024,41 @@ async function endBreak() {
 async function stopSession() {
   const f = S.focus; if (!f) return;
   stopTick();
-  S.detector?.stop?.();
+
+  /* 열린 채 끝나는 구간부터 닫는다 — 안 닫으면 서버가 세션 끝까지 이탈로 센다 */
+  const now = new Date();
+  if (f.openSpanKind) {
+    try { await db.closeSpan(f.id, now); }
+    catch { queueSpan({ t: 'close', sid: f.id, to: now.toISOString() }); }
+  } else if (f.spanFrom) {
+    queueSpan({ t: 'span', sid: f.id, kind: f.state, from: f.spanFrom, to: now.toISOString() });
+  }
+  f.openSpanKind = null; f.spanFrom = null;
+
+  /* 세션이 끝나면 서버는 그 세션에 구간을 더 받지 않습니다 (P0002).
+     밀린 구간을 남긴 채 끝내면 그 이탈·졸음이 영영 기록되지 않고
+     그 시간이 순공시간으로 남습니다. 그래서 다 밀어넣기 전에는 끝내지 않습니다. */
+  const clean = await flushSpans();
+  if (!clean && loadQ().some(it => it.sid === f.id)) {
+    startTick();
+    toast('아직 저장하지 못한 구간이 있어요 — 연결을 확인하고 종료를 다시 눌러주세요');
+    render();
+    return;
+  }
+
   try {
-    await db.endSession(f.id);
+    await db.endSession(f.id, now);
+    S.detector?.stop?.();
     S.result = await db.sessionDetail(f.id);
     S.focus = null;
     go('result');
-  } catch (e) { toast(msg(e)); S.focus = null; go('home'); }
+  } catch (e) {
+    /* 세션을 버리지 않는다. 서버에는 아직 열려 있고 다시 시도할 수 있다.
+       여기서 S.focus 를 비우면 사용자가 방금 공부한 시간이 화면에서 사라진다. */
+    startTick();
+    toast('기록을 저장하지 못했어요 — 연결을 확인하고 종료를 다시 눌러주세요');
+    render();
+  }
 }
 
 async function falsePositive() {

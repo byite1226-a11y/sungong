@@ -19,6 +19,11 @@ copyFileSync('index.html', 'dist/index.html');
 copyFileSync('src/styles.css', 'dist/styles.css');
 copyFileSync('manifest.webmanifest', 'dist/manifest.webmanifest');
 
+// TWA(안드로이드 앱) 가 이 도메인을 자기 것이라고 증명하는 파일.
+// 이게 없으면 앱을 열었을 때 주소창이 그대로 남습니다.
+mkdirSync('dist/.well-known', { recursive: true });
+copyFileSync('well-known/assetlinks.json', 'dist/.well-known/assetlinks.json');
+
 // 아이콘 하나가 없다고 배포 전체를 죽이지는 않습니다. 경고만 남기고 넘어갑니다.
 // (다운로드를 거치면 파일명의 하이픈이 떨어지는 일이 있어 실제로 한 번 물렸습니다)
 for (const f of ['icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'logo.svg']) {
