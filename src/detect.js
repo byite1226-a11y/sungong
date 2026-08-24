@@ -42,6 +42,8 @@ export class Detector {
     this.onPhase   = opts.onPhase   || (() => {});   // 'cam' → 'model' → 'run' 진행 보고
     this.lost      = false;
     this.errStreak = 0;                              // 추론이 연속으로 죽은 횟수
+    this.stall     = 0;                              // 새 프레임이 안 들어온 연속 틱
+    this._lastCt   = -1;
     this.state = 'ok';                 // ok | away | drowsy
     this.pending = null;               // 후보 상태
     this.pendingSince = 0;
@@ -205,6 +207,21 @@ export class Detector {
     const tr = this.stream?.getVideoTracks?.()[0];
     if (!tr || tr.readyState === 'ended' || !this.stream.active) return this._lost();
     if (this.video.readyState < 2) return;
+
+    /* 얼어붙은 프레임으로 판정하면 안 됩니다. currentTime 이 멈춰 있으면
+       새 영상이 안 들어오는 것이고, 그 프레임을 분석하면 마지막 장면이
+       영원히 반복돼 잘못된 '자리 비움'을 만듭니다.
+       재생을 되살려 보고, 그래도 안 살아나면 감지를 포기하고 수동으로 넘깁니다. */
+    const ct = this.video.currentTime;
+    if (ct === this._lastCt) {
+      this.stall++;
+      if (this.stall === 2 || this.stall === 6) this.video.play?.().catch(() => {});
+      if (this.stall >= 20) return this._lost();     // 10초간 정지 → 더는 관찰 불가
+      if (this.stall >= 2) {                          // 판정을 멈추고 상태를 유지한다
+        this.onTick({ ...this.last, stalled: this.stall });
+        return;
+      }
+    } else { this.stall = 0; this._lastCt = ct; }
     let res;
     try { res = this.lm.detectForVideo(this.video, performance.now()); this.errStreak = 0; }
     catch (e) {
