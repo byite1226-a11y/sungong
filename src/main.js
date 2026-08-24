@@ -1767,10 +1767,16 @@ function vSettings() {
 
 /* ── 카메라 마운트 (재렌더에도 스트림이 끊기지 않게 같은 video 노드를 옮긴다) ── */
 let videoEl = null;
+/* render() 가 app.innerHTML 로 화면을 통째로 갈아엎기 때문에 <video> 는 매번
+   DOM 에서 떨어졌다 다시 붙습니다. 모바일 브라우저는 이때 재생을 멈추고,
+   autoplay 속성은 최초 로드에만 적용되므로 저절로 다시 돌지 않습니다.
+   그대로 두면 화면이 마지막 프레임에 얼어붙고, 감지기는 그 프레임을 계속
+   분석해 영원히 '자리 비움'이 됩니다. 붙일 때마다 재생을 되살립니다. */
 function mountCam() {
   const slot = app.querySelector('#camslot');
   if (!slot || !videoEl) return;
-  slot.insertBefore(videoEl, slot.firstChild);
+  if (videoEl.parentElement !== slot) slot.insertBefore(videoEl, slot.firstChild);
+  if (videoEl.paused) videoEl.play().catch(() => {});
 }
 async function ensurePreview() {
   const p = S.profile || {};
