@@ -6,7 +6,7 @@ Play Store 가 정식으로 인정하는 방식이라 그대로 출시할 수 �
 
 ## 먼저 알아둘 것
 
-- **패키지 이름은 한 번 스토어에 올리면 영원히 못 바꿉니다.** 지금 `co.byite.sungong` 로 넣어뒀습니다.
+- **패키지 이름은 한 번 스토어에 올리면 영원히 못 바꿉니다.** 지금 `kr.co.byite.sungong` (도메인 byite.co.kr 기준) 으로 넣어뒀습니다.
   도메인이 `byite.co` 가 아니라면 바꾸세요 (`twa-manifest.json` 의 `packageId`,
   `well-known/assetlinks.json` 의 `package_name` 두 곳).
 - **키스토어를 잃어버리면 앱을 업데이트할 수 없습니다.** Play App Signing 을 켜두면
