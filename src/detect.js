@@ -39,7 +39,9 @@ export class Detector {
     this.onState   = opts.onState   || (() => {});
     this.onTick    = opts.onTick    || (() => {});
     this.onLost    = opts.onLost    || (() => {});   // 카메라가 세션 도중 끊겼을 때
+    this.onPhase   = opts.onPhase   || (() => {});   // 'cam' → 'model' → 'run' 진행 보고
     this.lost      = false;
+    this.errStreak = 0;                              // 추론이 연속으로 죽은 횟수
     this.state = 'ok';                 // ok | away | drowsy
     this.pending = null;               // 후보 상태
     this.pendingSince = 0;
@@ -59,10 +61,13 @@ export class Detector {
       });
       this.stream = stream;
       video.srcObject = stream;
-      await Promise.race([
-        video.play(),
-        new Promise((_, rej) => setTimeout(() => rej(Object.assign(new Error('camera start timeout'), { name: 'CamTimeout' })), 10000)),
-      ]);
+      let camT;
+      try {
+        await Promise.race([
+          video.play(),
+          new Promise((_, rej) => { camT = setTimeout(() => rej(Object.assign(new Error('camera start timeout'), { name: 'CamTimeout' })), 10000); }),
+        ]);
+      } finally { clearTimeout(camT); }
       // 다른 앱이 카메라를 가져가거나 사용자가 권한을 회수하면 트랙이 'ended' 로 끝난다.
       // 이걸 잡지 않으면 얼굴이 영영 안 보이는 것으로 읽혀 세션 내내 '자리 비움'이 된다.
       stream.getVideoTracks().forEach(tr => tr.addEventListener('ended', () => this._lost()));
@@ -70,12 +75,14 @@ export class Detector {
       this.failed = e.name === 'NotAllowedError' ? 'denied' : 'nocam';
       throw e;
     }
+    this.onPhase('model');            // 여기부터는 다운로드 — UI 가 '내려받는 중'을 보여줄 수 있게
+    let modelT;
     try {
       /* 느린 망에서 CDN 요청이 실패 대신 매달리면 '준비 중'에 무한히 걸린다.
-         모델 준비 전체에 시간 상한을 둔다 — 권한 프롬프트(getUserMedia)는 위에서
-         이미 끝났으므로 사용자가 읽는 시간과는 무관하다. */
+         모델 준비 전체에 시간 상한을 둔다 — 모바일 데이터에서 첫 다운로드(약 13MB)가
+         오래 걸릴 수 있어 여유 있게 잡는다. 권한 프롬프트는 위에서 이미 끝났다. */
       const deadline = new Promise((_, rej) =>
-        setTimeout(() => rej(new Error('model load timeout')), 25000));
+        { modelT = setTimeout(() => rej(new Error('model load timeout')), 35000); });
       const load = (async () => {
       const { FaceLandmarker, FilesetResolver } = await import('@mediapipe/tasks-vision');
       this._fileset = await FilesetResolver.forVisionTasks(WASM);
@@ -96,7 +103,8 @@ export class Detector {
     } catch (e) {
       this.failed = 'model';
       throw e;
-    }
+    } finally { clearTimeout(modelT); }
+    this.onPhase('run');
     this.timer = setInterval(() => this._tick(), SAMPLE_MS);
     return true;
   }
@@ -119,6 +127,34 @@ export class Detector {
     } catch {
       this.poseState = 'failed';       // 조용히 포기 — 이 경우 엎드림은 away 로 잡힌다
     }
+  }
+
+  /* 추론이 GPU 에서 반복해서 죽을 때 — 같은 fileset 으로 CPU 랜드마커를 다시 만든다 */
+  async _rebuildCpu() {
+    if (this._rebuilding || !this._fileset) return;
+    this._rebuilding = true;
+    try {
+      const { FaceLandmarker } = await import('@mediapipe/tasks-vision');
+      const next = await FaceLandmarker.createFromOptions(this._fileset, {
+        baseOptions: { modelAssetPath: FACE_MODEL, delegate: 'CPU' },
+        outputFaceBlendshapes: true,
+        outputFacialTransformationMatrixes: true,
+        runningMode: 'VIDEO',
+        numFaces: 1,
+      });
+      this.lm?.close?.();
+      this.lm = next; this.cpuOnly = true; this.errStreak = 0;
+    } catch { this._fatal(); }
+    this._rebuilding = false;
+  }
+
+  _fatal() {
+    if (this.lost) return;
+    this.lost = true;
+    clearInterval(this.timer);
+    this.ready = false;
+    this.failed = 'model';
+    this.onLost();
   }
 
   _lost() {
@@ -170,8 +206,18 @@ export class Detector {
     if (!tr || tr.readyState === 'ended' || !this.stream.active) return this._lost();
     if (this.video.readyState < 2) return;
     let res;
-    try { res = this.lm.detectForVideo(this.video, performance.now()); }
-    catch { return; }
+    try { res = this.lm.detectForVideo(this.video, performance.now()); this.errStreak = 0; }
+    catch (e) {
+      /* 생성은 됐는데 추론에서 죽는 기기가 있다(주로 GPU 런타임).
+         조용히 삼키면 '카메라는 보이는데 아무 판정도 없는' 상태가 된다 —
+         화면에 알리고, 몇 번 이상 반복되면 CPU 로 갈아탄 뒤, 그래도 안 되면 실패 처리한다. */
+      this.errStreak++;
+      this.onTick({ present: false, blink: 0, pitch: 0, body: false, reason: null,
+                    error: String((e && e.message) || e), errStreak: this.errStreak });
+      if (this.errStreak === 6 && !this.cpuOnly) this._rebuildCpu();
+      else if (this.errStreak >= 20) this._fatal();
+      return;
+    }
 
     const present = res.faceLandmarks?.length > 0;
     let blink = 0, pitch = 0;
