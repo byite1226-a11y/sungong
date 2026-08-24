@@ -1,0 +1,11 @@
+{
+  "IMG_0001.jpg": {
+    "1": { "mark": "circle",   "work": "solved" },
+    "2": { "mark": "circle",   "work": "solved" },
+    "3": { "mark": "slash",    "work": "solved" },
+    "4": { "mark": "triangle", "work": "partial" },
+    "5": { "mark": "star",     "work": "solved" },
+    "6": { "mark": "unmarked", "work": "blank" },
+    "7": { "mark": "circle",   "work": "blank" }
+  }
+}

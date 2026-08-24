@@ -1,0 +1,9 @@
+{
+  "name": "ssamplanner-grade-eval",
+  "private": true,
+  "type": "module",
+  "description": "Phase A — AI 숙제검사 판독 정확도 평가 하네스",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0"
+  }
+}
