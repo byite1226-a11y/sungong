@@ -64,7 +64,7 @@ function render() {
 
   app.innerHTML = `<div class="statusbar"></div>` + V();
   if (S.sheet) app.insertAdjacentHTML('beforeend', S.sheet());
-  if (S.route === 'focus') mountCam();
+  if (S.route === 'focus' || S.route === 'ready') mountCam();
 }
 
 const vBoot = () => `<div class="center"><div class="stack" style="align-items:center;gap:14px">
@@ -391,16 +391,26 @@ function vReady() {
               </div>
             </div></div>`
           : denied ? `<div style="padding-top:12px">
-            <div style="height:112px;border-radius:18px;background:var(--sunk);display:flex;flex-direction:column;
-              align-items:center;justify-content:center;gap:8px;text-align:center;padding:0 16px">
+            <div style="min-height:112px;border-radius:18px;background:var(--sunk);display:flex;flex-direction:column;
+              align-items:center;justify-content:center;gap:8px;text-align:center;padding:14px 16px">
               <div class="row" style="gap:8px">
                 <span style="color:var(--acc)">${ic('alert', 18)}</span>
-                <span class="h3">카메라 권한이 꺼져 있어요</span>
+                <span class="h3">${S.camFail === 'denied' ? '카메라 권한이 막혀 있어요'
+                  : S.camFail === 'model' ? '감지 모델을 불러오지 못했어요'
+                  : '카메라를 켤 수 없어요'}</span>
               </div>
-              <div style="font-size:13px;line-height:1.55;color:var(--tx-2)">지금은 수동 모드로 시작할 수 있습니다</div>
-              <button class="btn sm" data-a="go" data-v="settings"
-                style="width:auto;height:36px;padding:0 14px;border-radius:12px;border:1px solid var(--line);
-                background:transparent;color:var(--tx-2);font-size:12.5px;font-weight:700">설정에서 켜기</button>
+              <div style="font-size:13px;line-height:1.55;color:var(--tx-2)">${
+                S.camFail === 'denied'
+                  ? '주소창의 자물쇠(또는 ⋮ 메뉴) → 사이트 설정 → 카메라를 허용으로 바꾼 뒤 다시 시도하세요'
+                  : S.camFail === 'model'
+                    ? '네트워크가 느리거나 끊겼을 수 있어요. 연결을 확인하고 다시 시도하세요'
+                    : '다른 앱이 카메라를 쓰고 있지 않은지 확인해 주세요'}</div>
+              <div class="row" style="gap:8px">
+                <button class="btn sm" data-a="retryCam"
+                  style="width:auto;height:36px;padding:0 14px;border-radius:12px;background:var(--pri-weak);
+                  color:var(--pri-weak-tx);font-size:12.5px;font-weight:700">다시 시도</button>
+                <span class="cap">지금도 수동 모드로는 시작할 수 있어요</span>
+              </div>
             </div></div>`
           : `<div style="padding:12px 2px 2px;font-size:13px;line-height:1.55;color:var(--tx-2)">수동 모드에서는 시작·정지를 직접 눌러 순공시간을 기록합니다</div>`}
         </div>
@@ -1767,6 +1777,7 @@ async function ensurePreview() {
   if (p.cam_enabled === false) { S.detector = new ManualDetector({ onState: onDetState }); return; }
   if (S.detector && !S.detector.manual && S.detector.ready) return;
   if (!videoEl) { videoEl = el('<video playsinline muted autoplay></video>'); }
+  mountCam();   // DOM 밖의 비디오는 play() 가 영영 끝나지 않는다 — 슬롯이 있으면 먼저 꽂는다
   const d = new Detector({
     awaySec:   S.fast ? 3 : (p.away_threshold_sec ?? 20),
     drowsySec: S.fast ? 2 : (p.drowsy_threshold_sec ?? 8),
@@ -1779,6 +1790,7 @@ async function ensurePreview() {
   S.detector = d;
   try {
     await d.start(videoEl);
+    S.camFail = null;
     render();
     setCamState('착석 확인 중', true);
   } catch (e) {
@@ -1786,6 +1798,7 @@ async function ensurePreview() {
               : d.failed === 'model'  ? '감지 모델을 불러오지 못했습니다 — 수동 모드로 전환합니다'
               : '카메라를 열 수 없습니다 — 수동 모드로 전환합니다';
     toast(why);
+    S.camFail = d.failed || 'nocam';       // 준비 화면이 원인별 카드를 그린다
     S.detector = new ManualDetector({ onState: onDetState });
     render();
   }
@@ -1887,9 +1900,12 @@ async function attachSession(s, net, gross) {
     openSpanKind: null, pomodoro: s.pomodoro, cycle: 0, breakSec: 300, breakLeft: 0,
     todoTitle: null, todoPlan: 0, startedAt: Date.now() - gross * 1000,
   };
-  await ensurePreview();
+  /* 화면부터 보여준다. 카메라·모델 로딩은 focus 렌더의 mountCam 이 비동기로 처리한다.
+     여기서 ensurePreview 를 기다리면 폰에서 권한 프롬프트·모델 다운로드(10MB) 동안
+     route 가 boot 에 묶여 '불러오는 중'에서 멈춘다 — 실기기에서 실제로 그랬다. */
   startTick();
   go('focus');
+  ensurePreview();   // 기다리지 않는다 — 화면이 먼저, 카메라는 뒤에서
   toast('진행 중이던 세션을 이어서 잽니다');
 }
 
@@ -2147,6 +2163,12 @@ app.addEventListener('click', async (e) => {
     case 'pickTodo': R.todoId = R.todoId === v ? null : v; render(); return;
     case 'goal': R.goalMin = Math.max(5, Math.min(180, R.goalMin + Number(v))); render(); return;
     case 'togglePomo': R.pomodoro = !R.pomodoro; render(); return;
+    case 'retryCam': {
+      S.detector?.stop?.(); S.detector = null; S.camFail = null;
+      render();                      // '준비 중' 상태로 되돌리고
+      ensurePreview();               // 처음부터 다시 붙인다 (getUserMedia + 모델)
+      return;
+    }
     case 'fast': S.fast = !S.fast; localStorage.setItem('fast', S.fast ? '1' : '0');
       S.detector?.stop?.(); S.detector = null; render(); ensurePreview(); return;
     case 'toggleCam': {

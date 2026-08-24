@@ -59,7 +59,10 @@ export class Detector {
       });
       this.stream = stream;
       video.srcObject = stream;
-      await video.play();
+      await Promise.race([
+        video.play(),
+        new Promise((_, rej) => setTimeout(() => rej(Object.assign(new Error('camera start timeout'), { name: 'CamTimeout' })), 10000)),
+      ]);
       // 다른 앱이 카메라를 가져가거나 사용자가 권한을 회수하면 트랙이 'ended' 로 끝난다.
       // 이걸 잡지 않으면 얼굴이 영영 안 보이는 것으로 읽혀 세션 내내 '자리 비움'이 된다.
       stream.getVideoTracks().forEach(tr => tr.addEventListener('ended', () => this._lost()));
@@ -68,15 +71,27 @@ export class Detector {
       throw e;
     }
     try {
+      /* 느린 망에서 CDN 요청이 실패 대신 매달리면 '준비 중'에 무한히 걸린다.
+         모델 준비 전체에 시간 상한을 둔다 — 권한 프롬프트(getUserMedia)는 위에서
+         이미 끝났으므로 사용자가 읽는 시간과는 무관하다. */
+      const deadline = new Promise((_, rej) =>
+        setTimeout(() => rej(new Error('model load timeout')), 25000));
+      const load = (async () => {
       const { FaceLandmarker, FilesetResolver } = await import('@mediapipe/tasks-vision');
       this._fileset = await FilesetResolver.forVisionTasks(WASM);
-      this.lm = await FaceLandmarker.createFromOptions(this._fileset, {
-        baseOptions: { modelAssetPath: FACE_MODEL, delegate: 'GPU' },
+      const make = (delegate) => FaceLandmarker.createFromOptions(this._fileset, {
+        baseOptions: { modelAssetPath: FACE_MODEL, delegate },
         outputFaceBlendshapes: true,
         outputFacialTransformationMatrixes: true,
         runningMode: 'VIDEO',
         numFaces: 1,
       });
+      /* 구형 폰에서 GPU 델리게이트가 흔하게 죽는다. CPU 로 한 번 더 시도한다 —
+         2fps 라 CPU 로도 충분히 돈다. */
+      try { this.lm = await make('GPU'); }
+      catch { this.lm = await make('CPU'); this.cpuOnly = true; }
+      })();
+      await Promise.race([load, deadline]);
       this.ready = true;
     } catch (e) {
       this.failed = 'model';
@@ -92,12 +107,14 @@ export class Detector {
     this.poseState = 'loading';
     try {
       const { PoseLandmarker } = await import('@mediapipe/tasks-vision');
-      this.pose = await PoseLandmarker.createFromOptions(this._fileset, {
-        baseOptions: { modelAssetPath: POSE_MODEL, delegate: 'GPU' },
+      const makePose = (delegate) => PoseLandmarker.createFromOptions(this._fileset, {
+        baseOptions: { modelAssetPath: POSE_MODEL, delegate },
         runningMode: 'VIDEO',
         numPoses: 1,
         minPoseDetectionConfidence: 0.5,
       });
+      try { this.pose = await makePose(this.cpuOnly ? 'CPU' : 'GPU'); }
+      catch { this.pose = await makePose('CPU'); }
       this.poseState = 'ready';
     } catch {
       this.poseState = 'failed';       // 조용히 포기 — 이 경우 엎드림은 away 로 잡힌다
