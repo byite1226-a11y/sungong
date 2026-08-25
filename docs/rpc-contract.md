@@ -76,10 +76,17 @@
 > Phase 2에서 "선생님이 본다"를 붙일 때 RLS 정책이 아니라 RPC 안 WHERE 절 하나만 고치기
 > 위한 결정입니다 (설계서 v3 §4-5).
 
-## 6. 신규 RPC 9 — AI 숙제검사 (설계 확정 · 미구현)
+## 6. 신규 RPC — AI 숙제검사 (설계 확정 v3.1 · 미구현)
 
-전부 첫 줄 `require_uid()` + `SET search_path TO ''`. 마크 `circle|slash|triangle|star|unmarked` ·
-풀이 `solved|blank|partial`.
+전부 첫 줄 `require_uid()` + `SET search_path TO ''`.
+
+**마크 6종 (v3.1 §4-4 — 실제 채점 관습):** `circle`(정답) · `slash`(사선만 = 오답) ·
+`triangle`(사선 위에 △ 덧그림 = **오답→해결**) · `question`(☆·? = 질문) ·
+`check`(✓ = 채점과 무관, 집계 제외) · `unmarked`. 풀이 `solved|blank|partial`.
+
+> ⚠️ v3의 「△=부분 정답, ☆=다시 볼 것」은 **틀린 정의**였습니다. 복습 큐 의미가 바뀝니다:
+> `slash`만 남은 문항이 복습 큐(`resolved_at IS NULL`), `triangle`은 종이에서 이미 고친 것이라
+> 큐에서 빠지고, `question`은 복습 큐가 아니라 **별도 질문 목록**(Phase 2에서 선생님에게 전달).
 
 | RPC | 인자(설계) | 하는 일 |
 |---|---|---|
@@ -89,13 +96,19 @@
 | `fn_set_item_mark` | `p_item_id` · `p_mark` · `p_work` | 학생 정정 — 두 축 다. `source='user'`, `corrected_at` 기록 |
 | `fn_homework_detail` | `p_homework_id` | 문항 그리드: `[{ item_no, mark, work, mark_confidence, work_confidence, source }]` |
 | `fn_homework_check` | `p_homework_id` | 수행 검사 요약 — `{ total, solved, blank, unmarked }` **개수. 퍼센트 금지** |
-| `fn_achievement_summary` | `p_from` · `p_to` | 오답률 · △비율 · ☆미해결 · 빈칸 집계 (fn_range_summary 와 같은 기간 규약) |
-| `fn_review_queue` | (없음) | `resolved_at IS NULL` 인 slash/star 문항, 날짜순 |
-| `fn_resolve_review` | `p_item_id` | 복습 완료 처리 (`resolved_at` 기록) |
+| `fn_flag_pages` | `p_homework_id` | **확인 필요 페이지** 두 종류를 각각 반환 — 판독 의심(저신뢰 다수)과 내용 의심(`circle×blank`·`unmarked×solved`·빈칸 다수). 완성 비율(%) 대신 쓰는 플래그 (v3.1 §6-3) |
+| `fn_achievement_summary` | `p_from` · `p_to` | 오답률 · 미해결 오답 · 질문 수 · 빈칸 집계 (fn_range_summary 와 같은 기간 규약) |
+| `fn_review_queue` | (없음) | **`slash` 이고 `resolved_at IS NULL`** 인 문항, 날짜순. (`triangle`은 해결된 것 — 제외) |
+| `fn_question_list` | (없음) | `question` 문항 목록 — 복습 큐와 별도 (이름 미확정, v3.1 §4-4·§6-4의 "질문 목록") |
+| `fn_resolve_review` | `p_item_id` | 복습 완료 처리 (`resolved_at` 기록). 종이에 △를 덧그린 경우 재제출 판독이 같은 효과 |
+
+> 참고: v3.1 본문은 "RPC 11개"라 하면서 표에는 9개만 명시하고 §6-3에서 `fn_flag_pages`를
+> 추가로 언급합니다. 위 표는 그 10개에 질문 목록 조회(가칭 `fn_question_list`)를 더해 11개로
+> 맞춘 것입니다 — **이름·시그니처는 구현 전에 확정하고 이 문서를 먼저 고치세요.**
 
 스키마(설계): `homework` · `homework_photo` · `homework_item` · `ai_read_run` — 컬럼 정의는
-설계서 v3 §4-5. 불변식: `(homework_id, item_no)` 부분 유니크 · `client_id` 유니크 ·
-`*_confidence`·`source` 컬럼 GRANT 잠금.
+설계서 v3.1 §4-5 (`mark` enum은 6종). 불변식: `(homework_id, item_no)` 부분 유니크 ·
+`client_id` 유니크 · `*_confidence`·`source` 컬럼 GRANT 잠금.
 
 ## 변경 절차
 
