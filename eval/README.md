@@ -29,7 +29,26 @@ Phase A의 질문은 하나입니다 — **"Flash-Lite로 90%가 나오는가"**
 ## 2. 정답 라벨 작성
 
 사람이 직접 만듭니다. `labels.example.json` 을 복사해 `labels.json` 으로.
+`measure.mjs` 가 파싱하는 형태는 **파일명 → 문항번호 → {mark, work}** 의 중첩 객체
+정확히 하나입니다 (배열 아님):
 
+```json
+{
+  "IMG_0001.jpg": {
+    "1": { "mark": "circle",   "work": "solved" },
+    "2": { "mark": "slash",    "work": "solved" },
+    "3": { "mark": "triangle", "work": "solved" },
+    "4": { "mark": "unmarked", "work": "blank" }
+  },
+  "IMG_0002.jpg": {
+    "1": { "mark": "question", "work": "partial" }
+  }
+}
+```
+
+- 최상위 키는 `photos/` 안의 **파일명과 글자 하나까지 같아야** 합니다
+  (다르면 measure.mjs 가 측정을 중단하고 경고합니다)
+- 문항번호 키는 문자열이어도 됩니다 (`"1"`) — 내부에서 숫자로 비교합니다
 - `mark` 6종 (v3.1 §4-4 — 실제 채점 관습):
   - `circle` ○ 정답 · `slash` 사선만(오답) · `triangle` **사선 위에 △ 덧그림(오답→해결)**
   - `question` ☆ 또는 ? (질문) · `check` ✓ (채점과 무관) · `unmarked` 표시 없음
