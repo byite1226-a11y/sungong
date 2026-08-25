@@ -81,7 +81,9 @@ if (wDist.blank === 0)   add('bad', `blank 를 한 번도 못 읽었습니다 �
 if (wDist.partial/N < 0.01) add('warn', `partial 이 ${wDist.partial}건 뿐입니다 — 3분류가 사실상 2분류로 동작 중입니다`);
 if ((combo['circle × blank']||0) === 0) add('warn', `circle × blank 가 0건입니다 — "답만 적고 ○" 판정이 성립하지 않을 수 있습니다 (설계 핵심 칸)`);
 if (low/N > 0.15) add('warn', `신뢰도 0.7 미만 문항이 ${low}개(${(low/N*100).toFixed(1)}%) 입니다`);
-if (notFrom1.length) add('warn', `문항 번호가 1부터 시작하지 않는 사진 ${notFrom1.length}장`);
+/* 절반 이상이 1번부터가 아니면 크롭 평가셋(모의고사 중간 페이지 등)이 정상이다 — 경고하지 않는다 */
+if (notFrom1.length && notFrom1.length / Math.max(pageStats.length, 1) < 0.5)
+  add('warn', `문항 번호가 1부터 시작하지 않는 사진 ${notFrom1.length}장`);
 if (withGap.length)  add('warn', `번호가 중간에 비는 사진 ${withGap.length}장 — 문항을 빠뜨렸을 수 있습니다`);
 if (withDup.length)  add('bad',  `같은 번호가 중복된 사진 ${withDup.length}장 — 환각 가능성`);
 if (outliers.length) add('warn', `페이지당 문항 수 이상치 ${outliers.length}장 (중앙값 ${medN}개)`);
