@@ -5,7 +5,7 @@
  *   ① 채점 기호(mark 6종) ② 풀이 흔적(work 3종) 을 읽어 runs/ 에 기록합니다.
  *
  *   사용:  node read.mjs --photos photos                       # Gemini Flash-Lite (기본)
- *          node read.mjs --provider gemini --model gemini-2.5-flash-lite --media-res medium
+ *          node read.mjs --provider gemini --model gemini-3.1-flash-lite --media-res medium
  *          node read.mjs --provider anthropic --model claude-opus-5
  *   필요:  GEMINI_API_KEY (⚠️ 반드시 유료 티어 키 — 무료 티어는 숙제 사진이 모델 학습에
  *          쓰여 프라이버시 약속(v3.1 §8-4)이 무너집니다) 또는 ANTHROPIC_API_KEY
@@ -27,7 +27,8 @@ const arg = (name, def) => {
 };
 
 const PROVIDER   = arg('provider', 'gemini');
-const MODEL      = arg('model', PROVIDER === 'gemini' ? 'gemini-2.5-flash-lite' : 'claude-opus-5');
+// 기본 모델: 2.5 Flash-Lite 는 신규 사용자에게 404 로 막혀 있어(실측) 3.1 Flash-Lite 로 둔다
+const MODEL      = arg('model', PROVIDER === 'gemini' ? 'gemini-3.1-flash-lite' : 'claude-opus-5');
 const PROMPT_VER = arg('prompt', 'v2');
 const MEDIA_RES  = arg('media-res', 'medium');       // gemini 전용: low | medium | high
 const PHOTOS_DIR = path.resolve(here, arg('photos', 'photos'));

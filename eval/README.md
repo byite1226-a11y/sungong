@@ -4,8 +4,15 @@
 **Flutter와 무관하게 지금 돌 수 있습니다.**
 
 Phase A의 질문은 하나입니다 — **"Flash-Lite로 90%가 나오는가"** (§8-4).
-그래서 측정 순서는 `gemini-2.5-flash-lite`를 가장 먼저, 가장 집요하게. 정확도가 임계치를
+그래서 측정 순서는 Flash-Lite 를 가장 먼저, 가장 집요하게. 정확도가 임계치를
 넘는 모델끼리만 단가를 비교합니다.
+
+> 확인된 사실 (구 세션 실측):
+> - **`gemini-2.5-flash-lite` 는 신규 사용자에게 404 로 막혀 있습니다.** 기본 모델은
+>   `gemini-3.1-flash-lite` 입니다.
+> - **사진 4분할은 필요 없습니다.** Haiku+4분할 13/16 · Gemini 무분할 13/16 — 동률.
+>   Gemini 는 입력 해상도가 3072px(Haiku 1568px)라 분할 없이도 작은 기호를 읽습니다.
+>   read.mjs 가 통짜 입력인 것은 의도된 구조입니다. 분할 로직을 추가하지 마세요.
 
 ## ⚠️ API 키 — 반드시 Gemini 유료 티어
 
@@ -59,7 +66,7 @@ Phase A의 질문은 하나입니다 — **"Flash-Lite로 90%가 나오는가"**
 ```bash
 cd eval && npm install
 export GEMINI_API_KEY=...           # 유료 티어!
-node read.mjs --photos photos       # 기본: gemini-2.5-flash-lite · media_res medium
+node read.mjs --photos photos       # 기본: gemini-3.1-flash-lite · media_res medium
 node read.mjs --media-res high      # 해상도 비교 (비용 3배 — 정확도 이득과 같이 잴 것)
 node read.mjs --provider anthropic --model claude-opus-5   # 교차 비교용
 # → runs/<시각>-<모델>-<프롬프트버전>.json
@@ -92,7 +99,22 @@ node measure.mjs --run runs/<파일>.json --labels labels.json
 - ⚠️ 지표는 함께 읽으세요 — 구분·work의 분모는 "읽힌 문항"이라 **많이 누락하는 모델이
   그 둘에서 유리하게 보입니다.** missRate가 그걸 잡습니다.
 
-## 5. 미달 시
+## 5. 보고서 — 라벨 없이 (report.mjs)
+
+라벨을 만들기 전에도 "이 모델이 망가졌는가"는 분포로 드러납니다:
+
+```bash
+node report.mjs --run runs/<파일>.json
+# → report.html (사진과 판독을 나란히) + 콘솔 요약 (복사해서 보내면 됨)
+```
+
+- 마크/work **분포**, mark × work **조합**(circle × blank 설계 핵심 칸 포함),
+  **이상 신호**(triangle 0건 · circle 90%+ · 번호 중복/빈 곳 · 저신뢰 비율 등),
+  **사진별 판독**을 한 장의 HTML로 뽑습니다
+- 정답 라벨 없이 돌아가므로, 사진만 모이면 **measure 전에 먼저 이걸 돌려**
+  모델·프롬프트가 정상 범위에서 동작하는지 확인하세요
+
+## 6. 미달 시
 
 축소하지 않고 보완합니다: 프롬프트 개선(`read.mjs`의 `PROMPTS`에 v3 추가) → 모델 교체 →
 촬영 가이드 강화(문항 수 제한·프레임 가이드) → 재측정. **3차 시도 후에도 미달이면 숫자를
