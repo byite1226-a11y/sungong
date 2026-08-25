@@ -100,7 +100,8 @@ node read.mjs --provider anthropic --model claude-opus-5   # 교차 비교용
 ## 4. 채점
 
 ```bash
-node measure.mjs --run runs/<파일>.json --labels labels.json
+node measure.mjs                    # 최신 run 자동 선택 (labels.json 기준)
+node measure.mjs --run runs/<파일>.json --labels labels.json   # 명시 지정
 ```
 
 **게이트 다섯 지표 (v3.1 §8-2 — 측정 전에 못 박은 값):**
@@ -123,7 +124,8 @@ node measure.mjs --run runs/<파일>.json --labels labels.json
 라벨을 만들기 전에도 "이 모델이 망가졌는가"는 분포로 드러납니다:
 
 ```bash
-node report.mjs --run runs/<파일>.json
+node report.mjs                     # 최신 run 자동 선택
+node report.mjs --run runs/<파일>.json   # 명시 지정
 # → report.html (사진과 판독을 나란히) + 콘솔 요약 (복사해서 보내면 됨)
 ```
 

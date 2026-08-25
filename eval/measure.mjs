@@ -20,7 +20,18 @@ const arg = (name, def) => {
   return i > -1 ? process.argv[i + 1] : def;
 };
 
-const run    = JSON.parse(fs.readFileSync(path.resolve(here, arg('run', ''))));
+/* --run 을 생략하면 runs/ 의 가장 최근 파일을 쓴다 */
+const latestRun = (dir) => {
+  if (!fs.existsSync(dir)) return null;
+  const files = fs.readdirSync(dir).filter(f => f.endsWith('.json'))
+    .map(f => path.join(dir, f))
+    .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+  return files[0] || null;
+};
+const runPath = arg('run') ? path.resolve(here, arg('run')) : latestRun(path.join(here, 'runs'));
+if (!runPath) { console.error('runs/ 에 결과가 없습니다. 먼저 read.mjs 를 돌리거나 --run runs/<파일>.json 을 지정하세요'); process.exit(1); }
+if (!arg('run')) console.log(`최신 run 자동 선택: ${path.relative(process.cwd(), runPath)}`);
+const run    = JSON.parse(fs.readFileSync(runPath));
 const labels = JSON.parse(fs.readFileSync(path.resolve(here, arg('labels', 'labels.json'))));
 
 const MARKS = ['circle', 'slash', 'triangle', 'question', 'check', 'unmarked'];
