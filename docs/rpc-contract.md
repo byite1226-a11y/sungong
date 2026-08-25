@@ -4,77 +4,139 @@
 > 유일한 장치입니다.** RPC의 이름·인자·반환 모양을 바꾸려면 반드시 이 문서를 먼저 고치고,
 > 양쪽 저장소에 반영하세요.
 >
-> - 인자 목록의 정본은 이 저장소의 `src/db.js` 입니다 (웹앱 = 살아있는 명세서).
-> - 반환 모양은 웹앱 `src/main.js` 의 실사용에서 추출했습니다. `(관측)` 표시는 화면 코드가
->   실제로 읽는 필드만 적었다는 뜻입니다 — DB에는 더 있을 수 있지만, **여기 적힌 필드를
->   빼거나 모양을 바꾸면 클라이언트가 깨집니다.**
-> - 전 RPC `SECURITY DEFINER` + 첫 줄 `require_uid()` + `SET search_path TO ''`.
->   RLS 규칙은 `user_id = auth.uid()` 하나입니다.
-> - 시간 규약: **KST 고정 · 주 시작 월요일.** 날짜 인자는 `YYYY-MM-DD` 문자열,
->   시각 인자는 ISO 8601 (`toISOString()`).
+> **2026-08-25 서버 실조회로 정정.** 아래 시그니처는 문서 추정이 아니라 `public` 스키마
+> 실물입니다. 이 문서와 코드가 다르면 코드가 틀린 것입니다.
+> (이전 판의 `fn_set_threshold` · `fn_reorder_todos` · `fn_upsert_push_token` 은
+> **서버에 존재하지 않아 삭제**했습니다. `push_token` 테이블은 있으나 RPC 는 없습니다.)
+>
+> - 전 SECURITY DEFINER 함수에 `SET search_path=""` 확인 완료. `require_uid()` 는
+>   SECURITY DEFINER 가 아님(정상 — auth.uid() 를 호출자 문맥에서 읽어야 함).
+>   신규 RPC 도 동일 규율: **SECURITY DEFINER + `SET search_path TO ''` + 첫 줄 `require_uid()`**.
+> - 시간 규약: **KST 고정 · 주 시작 월요일.** date 인자는 `YYYY-MM-DD`, timestamptz 는 ISO 8601.
 
-## 1. 세션 (10)
+## 0. Postgres enum 4종 — 문자열이 글자 단위로 정본
 
-| RPC | 인자 | 반환 (관측) |
-|---|---|---|
-| `fn_start_session` | `p_client_id` uuid(멱등) · `p_subject_id?` · `p_todo_id?` · `p_source` `'camera'\|'manual'` · `p_goal_min?` · `p_pomodoro` bool · `p_device_id` · `p_started_at` ISO | 세션 행: `id`, `subject_id`, `goal_min`, … |
-| `fn_heartbeat` | `p_session_id` · `p_at` ISO | — |
-| `fn_open_span` | `p_session_id` · `p_kind` `'away'\|'drowsy'\|'pause'\|'break'` · `p_started_at` ISO · `p_client_id` uuid · `p_origin` `'auto'\|'manual'` | 열린 span. **활성 세션이 없으면 `P0002` 에러** — 클라이언트 큐가 이 코드를 보고 재시도를 포기한다 |
-| `fn_close_span` | `p_session_id` · `p_ended_at` ISO | — |
-| `fn_end_session` | `p_session_id` · `p_ended_at` ISO | — |
-| `fn_discard_session` | `p_session_id` | — |
-| `fn_resume_session` | (없음) | `{ session, net_sec, gross_sec }` — 활성 세션 없으면 null/빈값 |
-| `fn_session_detail` | `p_session_id` | `{ session: { id, started_at, ended_at, eff_end, … }, spans: [{ id, kind, started_at, ended_at, seconds, reverted }] }` |
-| `fn_revert_span` | `p_span_id` | — (오탐 정정: 구간을 순공으로 되돌림) |
-| `fn_unrevert_span` | `p_span_id` | — |
+```
+span_kind      : away | drowsy | pause | break
+span_origin    : auto | manual
+session_source : camera | manual
+session_status : active | ended | discarded
+```
 
-## 2. 집계 (6)
+⚠️ `break` 는 Dart/JS 예약어 계열 — 클라이언트 enum 이름이 무엇이든 **전송 문자열은
+`break`** 여야 한다 (Dart 의 `.name` 그대로 보내는 실수 주의).
 
-| RPC | 인자 | 반환 (관측) |
-|---|---|---|
-| `fn_today` | (없음) | `{ net_sec, goal_min, todos: [{ id, title, done_at, plan_min, … }] }` |
-| `fn_streak` | (없음) | `{ current, longest }` |
-| `fn_calendar_month` | `p_year` · `p_month` (1–12) | `{ from, to, total_sec, studied_days, streak: { longest }, days: [{ day, … }] }` |
-| `fn_calendar_week` | `p_monday` `YYYY-MM-DD` | `{ from, to, days: [{ day, net_sec }], sessions: [{ started_at, ended_at, subject_id }] }` |
-| `fn_day_detail` | `p_date` `YYYY-MM-DD` | `{ day, net_sec, sessions: […] }` |
-| `fn_range_summary` | `p_from` · `p_to` | `{ total_sec, prev_total_sec, studied_days, by_subject, by_weekday, by_hour_bucket, pattern }` |
+## 1. RPC 25개 (서버 실물)
 
-> ⚠️ **순공시간(net)은 어디에도 저장되지 않습니다.** `net = gross − Σ(away+drowsy+pause+break)`
-> 를 집계 RPC가 조회 시점에 계산합니다. 클라이언트에서도 캐시하지 마세요 —
-> `fn_revert_span` 정정이 소급 반영되어야 합니다.
+### 1-1. jsonb 반환 (16)
 
-## 3. 데이터 관리 (2)
-
-| RPC | 인자 | 반환 |
-|---|---|---|
-| `fn_export_json` | (없음) | 전체 기록 JSON |
-| `fn_delete_all_records` | (없음) | — |
-
-## 4. UI 미구현 (7) — 서버는 완성, 화면만 없음
-
-| RPC | 기능 |
+| RPC | 인자 |
 |---|---|
-| `fn_defer_todo` | 내일로 미루기 |
-| `fn_materialize_todos` | 반복 할 일 생성 |
-| `fn_edit_span` | 구간 경계 수동 편집 |
-| `fn_reorder_todos` | 할 일 순서 변경 |
-| `fn_sync_session` | 오프라인 세션 동기화 |
-| `fn_set_threshold` | 임계값 직접 조정 |
-| `fn_upsert_push_token` | 푸시 토큰 |
+| `fn_add_span` | `p_session_id uuid, p_kind span_kind, p_started_at timestamptz, p_ended_at timestamptz` |
+| `fn_calendar_month` | `p_year int, p_month int` |
+| `fn_calendar_week` | `p_monday date` |
+| `fn_day_detail` | `p_date date` |
+| `fn_delete_all_records` | — |
+| `fn_delete_span` | `p_span_id uuid` |
+| `fn_edit_span` | `p_span_id uuid, p_started_at timestamptz, p_ended_at timestamptz` |
+| `fn_export_json` | — |
+| `fn_range_summary` | `p_from date, p_to date` |
+| `fn_resume_session` | — |
+| `fn_revert_span` | `p_span_id uuid` |
+| `fn_session_detail` | `p_session_id uuid` |
+| `fn_streak` | — |
+| `fn_sync_session` | `p_payload jsonb` — ⚠️ 웹 정본(src/db.js)에 호출부 없음. **payload 스키마 미확정 — 지어내지 말 것** |
+| `fn_today` | — |
+| `fn_unrevert_span` | `p_span_id uuid` |
 
-## 5. 직접 테이블 접근 (RPC 아님 — 웹앱이 쓰는 것)
+### 1-2. 복합 행(row) 반환 (7) — **jsonb 아님. PostgREST 가 단일 객체로 반환**
+
+| RPC | 인자 (기본값 포함) | 반환 행 |
+|---|---|---|
+| `fn_close_span` | `p_session_id uuid, p_ended_at timestamptz = now()` | `session_span` |
+| `fn_defer_todo` | `p_todo_id uuid, p_days int = 1` | `todo` |
+| `fn_discard_session` | `p_session_id uuid` | `session` |
+| `fn_end_session` | `p_session_id uuid, p_ended_at timestamptz = now()` | `session` |
+| `fn_heartbeat` | `p_session_id uuid, p_at timestamptz = now()` | `session` |
+| `fn_open_span` | `p_session_id uuid, p_kind span_kind, p_started_at timestamptz = now(), p_client_id text = null, p_origin span_origin = 'auto'` | `session_span` |
+| `fn_start_session` | `p_client_id text` (**유일한 필수 인자**), `p_subject_id uuid = null, p_todo_id uuid = null, p_source session_source = 'camera', p_goal_min int = null, p_pomodoro bool = false, p_device_id text = null, p_started_at timestamptz = now()` | `session` |
+
+> ⛔ **함정 1:** `fn_close_span` 의 첫 인자는 `p_span_id` 가 아니라 **`p_session_id`** —
+> 세션 기준으로 열린 구간을 닫는다. `fn_delete_span`·`fn_edit_span`·`fn_revert_span`·
+> `fn_unrevert_span` 이 `p_span_id` 다.
+> ⛔ **함정 2:** 이 7개를 jsonb 파서로 처리하면 깨진다.
+
+### 1-3. int 반환 (2)
+
+| RPC | 인자 |
+|---|---|
+| `fn_close_stale_sessions` | `p_grace interval = '00:10:00'` — interval 은 `'00:10:00'` 문자열로 전달 |
+| `fn_materialize_todos` | `p_from date, p_to date` |
+
+### 1-4. fn_open_span 의 P0002
+
+활성 세션이 없으면 `P0002` 로 거절한다 — 클라이언트 구간 큐가 이 코드를 보고 재시도를
+포기하고 사용자에게 알린다. **큐가 비기 전에 세션을 끝내면 그 시간이 영영 못 들어간다.**
+
+## 2. 테이블 (8)
+
+| 테이블 | 비고 |
+|---|---|
+| `profile` | 목표·카메라·졸음 토글, **`away_threshold_sec` / `drowsy_threshold_sec` (사용자별 임계값 override — 웹 정본이 실제로 읽는다: `p.away_threshold_sec ?? 20`)**, 포모도로 5종, 알림 4종 |
+| `session` | `client_id`, `device_id`, `source`, `status`, `last_beat_at`, `goal_min`, `pomodoro` |
+| `session_span` | `kind`, `origin`, `started_at`, `ended_at`, **`reverted_at`**, `edited_at`, `client_id` |
+| `subject` | 이름·색·정렬·보관 |
+| `todo` | `subject_id`, `recurrence_id`, `due_date`, `plan_min`, `done_at` |
+| `todo_recurrence` | `freq`, `byweekday ARRAY`, `starts_on`, `ends_on`, `active` |
+| `correction_log` | 정정 이력. **`threshold_before` / `threshold_after`** — 임계값 자동 조정 흐름이 설계에 있음 |
+| `push_token` | `token`, `platform`, `device_id`, `last_seen_at` — **전용 RPC 는 아직 없다** |
+
+⛔ **숙제(AI 판독) 테이블·RPC 는 서버에 하나도 없다** (2026-08-25 전수 확인).
+Flutter 스텁이 `HomeworkRpcNotDeployed` 를 던지는 구현이 정확하며 유지한다.
+
+## 3. 뷰 (3) — ⛔ 순공 계산의 정본
+
+```
+v_session_net   id, user_id, subject_id, todo_id, status, source, pomodoro, goal_min,
+                started_at, ended_at, eff_end, day_kst,
+                gross_sec, excluded_sec, net_sec,
+                away_sec, away_count, drowsy_sec, drowsy_count,
+                pause_sec, break_sec, break_count, reverted_count
+v_daily_net     user_id, day_kst, net_sec, gross_sec, excluded_sec,
+                away_count, drowsy_count, session_count
+v_todo_progress todo 전 컬럼 + actual_sec, actual_min, session_count
+```
+
+**순공시간의 정본은 서버 뷰다.** `net = gross − Σ(away+drowsy+pause+break)` ·
+저장 금지 · 조회 시 계산은 이 뷰로 구현돼 있다.
+클라이언트 계산(`net_time.dart`)은 **진행 중 세션의 실시간 표시 전용** — 이력·통계를
+클라이언트에서 재계산하면 홈과 통계 숫자가 갈린다. revert(`reverted_at`)·`eff_end`
+클램프 규칙이 뷰와 일치하는지 정합 테스트로 지킨다.
+
+## 4. 직접 테이블 접근 (RPC 아님 — 웹앱이 쓰는 범위)
 
 | 대상 | 접근 | 비고 |
 |---|---|---|
-| `profile` | select single / update | 닉네임·설정 |
+| `profile` | select single / update | 닉네임·설정·임계값 |
 | `subject` | select (`archived_at is null`, `sort_order` 정렬) | 과목 5색 |
 | `todo` | insert / update / delete | `user_id` 명시 삽입 |
 | `v_todo_progress` (뷰) | select (`due_date`, `sort_order`) | 플래너 목록 |
 | `correction_log` | select (최신순) | 정정 이력 |
 
-> 🔑 **신규 숙제 데이터는 이 절에 추가하지 마세요.** 전부 RPC 뒤에 둡니다 (아래 6장).
-> Phase 2에서 "선생님이 본다"를 붙일 때 RLS 정책이 아니라 RPC 안 WHERE 절 하나만 고치기
-> 위한 결정입니다 (설계서 v3 §4-5).
+> 🔑 **신규 숙제 데이터는 이 절에 추가하지 마세요. 전부 RPC 뒤에** (아래 6장).
+
+## 5. 반환 모양 (웹앱 실사용 관측 — 필드를 빼면 클라이언트가 깨진다)
+
+| RPC | 반환 (관측) |
+|---|---|
+| `fn_resume_session` | `{ session, net_sec, gross_sec }` — 활성 세션 없으면 null/빈값 |
+| `fn_session_detail` | `{ session: { id, started_at, ended_at, eff_end, … }, spans: [{ id, kind, started_at, ended_at, seconds, reverted }] }` |
+| `fn_today` | `{ net_sec, goal_min, todos: […] }` |
+| `fn_streak` | `{ current, longest }` |
+| `fn_calendar_month` | `{ from, to, total_sec, studied_days, streak: { longest }, days: […] }` |
+| `fn_calendar_week` | `{ from, to, days: [{ day, net_sec }], sessions: [{ started_at, ended_at, subject_id }] }` |
+| `fn_day_detail` | `{ day, net_sec, sessions: […] }` |
+| `fn_range_summary` | `{ total_sec, prev_total_sec, studied_days, by_subject, by_weekday, by_hour_bucket, pattern }` |
 
 ## 6. 신규 RPC — AI 숙제검사 (설계 확정 v3.1 · 미구현)
 
