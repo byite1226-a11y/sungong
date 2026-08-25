@@ -206,4 +206,5 @@ const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
 const outFile = path.join(here, 'runs', `${stamp}-${MODEL}-${PROMPT_VER}.json`);
 fs.writeFileSync(outFile, JSON.stringify(out, null, 2));
 console.log(`\n저장: ${path.relative(process.cwd(), outFile)}`);
-console.log(`다음: node measure.mjs --run ${path.relative(here, outFile)} --labels labels.json`);
+console.log('다음: node report.mjs           (방금 run 자동 선택 — 분포·이상 신호 확인)');
+console.log('      node measure.mjs --labels labels.json   (라벨이 있으면 게이트 채점)');

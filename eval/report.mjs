@@ -10,10 +10,19 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const arg = (n, d) => { const i = process.argv.indexOf(`--${n}`); return i > -1 ? process.argv[i+1] : d; };
-const RUN    = arg('run');
+/* --run 을 생략하면 runs/ 의 가장 최근 파일을 쓴다 — 타임스탬프 파일명을 손으로 칠 필요 없음 */
+const latestRun = (dir) => {
+  if (!fs.existsSync(dir)) return null;
+  const files = fs.readdirSync(dir).filter(f => f.endsWith('.json'))
+    .map(f => path.join(dir, f))
+    .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+  return files[0] || null;
+};
+const RUN    = arg('run') || latestRun('runs');
 const PHOTOS = arg('photos', 'photos');
 const OUT    = arg('out', 'report.html');
-if (!RUN) { console.error('사용법: node report.mjs --run runs/<파일>.json'); process.exit(1); }
+if (!RUN) { console.error('runs/ 에 결과가 없습니다. 먼저 read.mjs 를 돌리거나 --run runs/<파일>.json 을 지정하세요'); process.exit(1); }
+if (!arg('run')) console.log(`최신 run 자동 선택: ${RUN}`);
 
 const raw = JSON.parse(fs.readFileSync(RUN, 'utf8'));
 const src = raw.photos || raw;
