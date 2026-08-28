@@ -97,6 +97,35 @@ node read.mjs --provider anthropic --model claude-opus-5   # 교차 비교용
 - 출력은 압축 포맷(`1:c:s:95:90` 한 줄/문항) — 출력 단가가 입력의 4~8배라 JSON 대비 45~57% 절감
 - 대량 재측정은 Gemini **Batch API**(반값)로 돌려도 됩니다 — 평가 실행은 지연을 감당할 수 있음
 
+## 3-1. 정정 루프 — 파일럿 (2026-08-28 지시)
+
+**CC/AI는 라벨을 만들지 않는다.** 판독 → 사람이 보고서를 종이와 대조해 **틀린 것만** 정정 →
+정정을 얹어 라벨 확정. 사용자가 손대지 않은 항목 = 판독이 맞았다는 뜻이고,
+확인하지 않은 항목은 정답으로 치지 않는다(집계 제외).
+
+```bash
+cd eval
+export GEMINI_API_KEY=...                              # 파일럿 10장은 무료 티어 허용(스모크 전용)
+node read.mjs --photos photos/test10 --prompt v2       # ① v2 판독
+node read.mjs --photos photos/test10 --prompt v0       # ② v0 판독 (원본 프롬프트 — 아래 참조)
+node compare_runs.mjs --a runs/<v0>.json --b runs/<v2>.json    # ③ v0/v2 비교표
+node report_md.mjs --run runs/<v2>.json --tier free    # ④ 정정용 보고서 (results/report_pilot_<ts>.md)
+# ⑤ 보고서 §5 형식으로 정정 작성 → corrections.txt (틀린 것만, 없으면 "없음")
+node apply_corrections.mjs --run runs/<v2>.json --corrections corrections.txt
+#    → dataset/labels/labels_<ts>.json (원 판독 보존 + confirmed 구분)
+```
+
+- `--tier free|paid` 는 필수 — 보고서 헤더에 찍힌다. **무료 티어 숫자는 게이트 판정에 쓰지 않는다.**
+- 전량 120장은 **유료 전환 후에만.** 이어하기·측정 실패 분리·부트스트랩 신뢰구간은 그 단계에서 추가한다.
+- `--confirm critical` (전량 1차 정정용): slash·triangle·unclear_st + 신뢰도 60 미만 + 정정 항목만
+  확인됨 처리, 나머지는 미확인으로 남긴다.
+
+**프롬프트 v0** — `byite-co/scheduler` `supabase/functions/ai-homework-check/observation.ts` 의
+`OBSERVATION_SYSTEM_PROMPT`(obs-prompt-1) 원문. 개정 4종이 전부 회귀해 살아남은 기준이다
+(정확 13/16, 개정판 9~11 — 해당 파일 주석 참조). **한 글자도 고치지 말 것.**
+형식 차이: 표시가 있는 문항만 출력(unmarked 없음) · work·확신도 없음 ·
+s/t 구분 불가를 `slash_family_unclear`(→`unclear_st`)로 표명 · 한 문항에 표시 두 행 가능.
+
 ## 4. 채점
 
 ```bash
