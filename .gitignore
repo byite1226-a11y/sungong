@@ -1,2 +1,9 @@
 node_modules/
 dist/
+
+# 평가셋 — 모의고사 지면 사진. 저작물 + 개인 필기. 절대 커밋 금지
+eval/photos/
+eval/results/
+eval/dataset/
+tools/grade_eval/dataset/
+tools/grade_eval/results/
